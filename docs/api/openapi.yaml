@@ -1,0 +1,173 @@
+﻿openapi: 3.0.3
+info:
+  title: QR Restaurant Ordering API
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000/api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MenuItem:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        price: { type: number, format: float }
+        isAvailable: { type: boolean }
+    OrderItemInput:
+      type: object
+      required: [menuItemId, quantity]
+      properties:
+        menuItemId: { type: integer }
+        quantity: { type: integer, minimum: 1 }
+        note: { type: string }
+    CreateOrderRequest:
+      type: object
+      required: [tableCode, signature, items]
+      properties:
+        tableCode: { type: string, example: T01 }
+        signature: { type: string }
+        customerNote: { type: string }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemInput'
+    UpdateOrderStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [new, confirmed, preparing, ready, served, completed, cancelled]
+    CreatePaymentRequest:
+      type: object
+      required: [orderId, amount, method]
+      properties:
+        orderId: { type: integer }
+        amount: { type: number, format: float }
+        method:
+          type: string
+          enum: [cash, card, bank_transfer, e_wallet]
+        transactionRef: { type: string }
+
+paths:
+  /public/menu:
+    get:
+      summary: Get active menu for customer page
+      parameters:
+        - in: query
+          name: tableCode
+          schema: { type: string }
+          required: true
+        - in: query
+          name: signature
+          schema: { type: string }
+          required: true
+      responses:
+        '200':
+          description: Menu returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  categories:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: integer }
+                        name: { type: string }
+                        items:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/MenuItem'
+
+  /public/orders:
+    post:
+      summary: Customer places an order by QR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+
+  /staff/orders:
+    get:
+      summary: Staff sees orders with filters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [new, confirmed, preparing, ready, served, completed, cancelled]
+        - in: query
+          name: tableCode
+          schema: { type: string }
+      responses:
+        '200':
+          description: Order list
+
+  /staff/orders/{id}/status:
+    patch:
+      summary: Kitchen/Staff updates order status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateOrderStatusRequest'
+      responses:
+        '200':
+          description: Updated
+
+  /staff/payments:
+    post:
+      summary: Staff records payment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment created
+
+  /admin/menu-items:
+    post:
+      summary: Admin creates menu item
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Created
+
+  /admin/tables:
+    get:
+      summary: Admin lists tables
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: OK

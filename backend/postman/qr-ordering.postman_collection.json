@@ -1,0 +1,69 @@
+﻿{
+  "info": {
+    "name": "QR Ordering MVP",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Public - Get Menu",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/public/menu?tableCode={{tableCode}}&signature={{signature}}"
+      }
+    },
+    {
+      "name": "Public - Create Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tableCode\": \"{{tableCode}}\",\n  \"signature\": \"{{signature}}\",\n  \"customerNote\": \"Less spicy\",\n  \"items\": [\n    { \"menuItemId\": 1, \"quantity\": 2, \"note\": \"No onion\" },\n    { \"menuItemId\": 4, \"quantity\": 1 }\n  ]\n}"
+        },
+        "url": "{{baseUrl}}/api/public/orders"
+      }
+    },
+    {
+      "name": "Staff - List Orders",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{staffToken}}" }
+        ],
+        "url": "{{baseUrl}}/api/staff/orders"
+      }
+    },
+    {
+      "name": "Staff - Update Order Status",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{staffToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"preparing\",\n  \"reason\": \"Kitchen accepted\"\n}"
+        },
+        "url": "{{baseUrl}}/api/staff/orders/{{orderId}}/status"
+      }
+    },
+    {
+      "name": "Staff - Create Payment",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{staffToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderId\": {{orderId}},\n  \"amount\": 165000,\n  \"method\": \"cash\",\n  \"note\": \"Paid at counter\"\n}"
+        },
+        "url": "{{baseUrl}}/api/staff/payments"
+      }
+    }
+  ]
+}

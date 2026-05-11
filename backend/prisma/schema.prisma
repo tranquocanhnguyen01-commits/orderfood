@@ -1,0 +1,205 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  staff
+  kitchen
+}
+
+enum OrderStatus {
+  new
+  confirmed
+  preparing
+  ready
+  served
+  completed
+  cancelled
+}
+
+enum PaymentStatus {
+  unpaid
+  partially_paid
+  paid
+  refunded
+}
+
+enum PaymentMethod {
+  cash
+  card
+  bank_transfer
+  e_wallet
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  fullName     String   @map("full_name") @db.VarChar(120)
+  username     String   @unique @db.VarChar(60)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         UserRole
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ordersCreated Order[]          @relation("OrderCreatedBy")
+  paymentsMade  Payment[]
+  statusLogs    OrderStatusLog[]
+
+  @@map("users")
+}
+
+model Table {
+  id        BigInt   @id @default(autoincrement())
+  code      String   @unique @db.VarChar(20)
+  name      String   @db.VarChar(120)
+  capacity  Int      @default(4)
+  zone      String?  @db.VarChar(60)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  qrTokens  TableQrToken[]
+  sessions  TableSession[]
+  orders    Order[]
+
+  @@map("tables")
+}
+
+model TableQrToken {
+  id             BigInt   @id @default(autoincrement())
+  tableId        BigInt   @map("table_id")
+  tokenSignature String   @map("token_signature") @db.VarChar(255)
+  expiresAt      DateTime? @map("expires_at")
+  isRevoked      Boolean  @default(false) @map("is_revoked")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  table Table @relation(fields: [tableId], references: [id])
+
+  @@map("table_qr_tokens")
+}
+
+model MenuCategory {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @db.VarChar(120)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id          BigInt   @id @default(autoincrement())
+  categoryId  BigInt   @map("category_id")
+  sku         String?  @unique @db.VarChar(50)
+  name        String   @db.VarChar(160)
+  description String?  @db.Text
+  imageUrl    String?  @map("image_url") @db.Text
+  price       Decimal  @db.Decimal(12, 2)
+  isAvailable Boolean  @default(true) @map("is_available")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category   MenuCategory @relation(fields: [categoryId], references: [id])
+  orderItems OrderItem[]
+
+  @@map("menu_items")
+}
+
+model TableSession {
+  id         BigInt    @id @default(autoincrement())
+  tableId    BigInt    @map("table_id")
+  openedAt   DateTime  @default(now()) @map("opened_at")
+  closedAt   DateTime? @map("closed_at")
+  guestCount Int?      @map("guest_count")
+  note       String?   @db.Text
+  isOpen     Boolean   @default(true) @map("is_open")
+
+  table  Table   @relation(fields: [tableId], references: [id])
+  orders Order[]
+
+  @@map("table_sessions")
+}
+
+model Order {
+  id            BigInt        @id @default(autoincrement())
+  orderCode     String        @unique @map("order_code") @db.VarChar(30)
+  tableId       BigInt        @map("table_id")
+  sessionId     BigInt        @map("session_id")
+  status        OrderStatus   @default(new)
+  paymentStatus PaymentStatus @default(unpaid) @map("payment_status")
+  customerNote  String?       @map("customer_note") @db.Text
+  createdByUserId BigInt?     @map("created_by_user_id")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  table         Table          @relation(fields: [tableId], references: [id])
+  session       TableSession   @relation(fields: [sessionId], references: [id])
+  createdByUser User?          @relation("OrderCreatedBy", fields: [createdByUserId], references: [id])
+  items         OrderItem[]
+  payments      Payment[]
+  statusLogs    OrderStatusLog[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                BigInt      @id @default(autoincrement())
+  orderId           BigInt      @map("order_id")
+  menuItemId        BigInt      @map("menu_item_id")
+  itemNameSnapshot  String      @map("item_name_snapshot") @db.VarChar(160)
+  unitPriceSnapshot Decimal     @map("unit_price_snapshot") @db.Decimal(12, 2)
+  quantity          Int
+  note              String?     @db.VarChar(255)
+  kitchenStatus     OrderStatus @default(new) @map("kitchen_status")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@map("order_items")
+}
+
+model Payment {
+  id             BigInt        @id @default(autoincrement())
+  orderId        BigInt        @map("order_id")
+  amount         Decimal       @db.Decimal(12, 2)
+  method         PaymentMethod
+  paidAt         DateTime      @default(now()) @map("paid_at")
+  paidByUserId   BigInt?       @map("paid_by_user_id")
+  transactionRef String?       @map("transaction_ref") @db.VarChar(120)
+  note           String?       @db.Text
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  order      Order @relation(fields: [orderId], references: [id])
+  paidByUser User? @relation(fields: [paidByUserId], references: [id])
+
+  @@map("payments")
+}
+
+model OrderStatusLog {
+  id              BigInt      @id @default(autoincrement())
+  orderId         BigInt      @map("order_id")
+  fromStatus      OrderStatus? @map("from_status")
+  toStatus        OrderStatus @map("to_status")
+  changedByUserId BigInt?     @map("changed_by_user_id")
+  reason          String?     @db.Text
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  order         Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedByUser User? @relation(fields: [changedByUserId], references: [id])
+
+  @@map("order_status_logs")
+}
+

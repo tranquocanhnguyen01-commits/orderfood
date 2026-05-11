@@ -1,0 +1,91 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Màn hình bếp</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
+    .container{max-width:1180px;margin:0 auto;padding:16px}.top{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.muted{color:var(--muted);font-size:14px}.ok{color:#15803d}.err{color:#b91c1c}
+    .btn{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-weight:600}.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;align-items:start}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .item{border-top:1px dashed var(--line);margin-top:8px;padding-top:8px}.between{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#1e3a8a}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top">
+      <h1 style="margin:0 0 6px">Màn hình bếp</h1>
+      <div class="muted">Quản lý theo từng món: mới -> đang làm -> sẵn sàng</div>
+      <div class="row" style="margin-top:8px">
+        <button id="refresh" class="btn">Làm mới</button>
+        <button id="goLogin" class="btn">Đăng nhập</button>
+        <button id="goStaff" class="btn">Thu ngân</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+    <div id="orders" class="grid"></div>
+  </div>
+<script>
+const statusEl=document.getElementById('status');
+const ordersEl=document.getElementById('orders');
+
+function token(){ return localStorage.getItem('staff_token') || localStorage.getItem('kitchen_token') || ''; }
+function setStatus(msg,ok=true){ statusEl.className=ok?'ok':'err'; statusEl.textContent=msg; }
+function nextAction(s){ if(s==='new') return 'preparing'; if(s==='preparing') return 'ready'; return null; }
+function friendly(msg){ if(msg&&msg.startsWith('Invalid item transition')) return 'Chuyển trạng thái không hợp lệ'; if(msg==='Missing bearer token'||msg==='Invalid token') return 'Vui lòng đăng nhập lại'; return msg||'Có lỗi'; }
+
+async function updateItem(id,status){
+  try{
+    const r=await fetch(`/api/staff/order-items/${id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token()}`},body:JSON.stringify({status})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.message||'Update failed');
+    setStatus(`Món #${id} -> ${status}`); await loadOrders();
+  }catch(e){ setStatus(friendly(e.message),false); }
+}
+
+function render(orders){
+  ordersEl.innerHTML=''; let shown=0;
+  const sorted=[...(orders||[])].sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  for(const o of sorted){
+    const active=(o.items||[]).filter(i=>['new','preparing'].includes(i.kitchenStatus));
+    if(!active.length) continue;
+    shown++;
+    const c=document.createElement('div'); c.className='card';
+    c.innerHTML=`<div class="between"><strong>${o.orderCode}</strong><span class="badge">Bàn ${o.table?.code||'-'}</span></div>`;
+    for(const it of active){
+      const action=nextAction(it.kitchenStatus);
+      const div=document.createElement('div'); div.className='item';
+      div.innerHTML=`<div class="between"><div>${it.quantity} x ${it.itemNameSnapshot}</div><span class="badge">${it.kitchenStatus}</span></div>`;
+      if(action){ const b=document.createElement('button'); b.className='btn primary'; b.textContent=action==='preparing'?'Bắt đầu làm':'Đánh dấu sẵn sàng'; b.onclick=()=>updateItem(it.id,action); div.appendChild(b); }
+      c.appendChild(div);
+    }
+    ordersEl.appendChild(c);
+  }
+  if(!shown) ordersEl.innerHTML='<div class="muted">Không có món nào đang chờ bếp xử lý.</div>';
+}
+
+function toggleLoginBtn(){ document.getElementById('goLogin').style.display = token() ? 'none' : 'inline-block'; }
+
+async function loadOrders(){
+  toggleLoginBtn();
+  const t=token();
+  if(!t){ setStatus('Chưa đăng nhập. Bấm Đăng nhập để tiếp tục.',false); ordersEl.innerHTML=''; return; }
+  try{
+    const r=await fetch('/api/staff/orders',{headers:{Authorization:`Bearer ${t}`}});
+    const d=await r.json(); if(!r.ok) throw new Error(d.message||'Load failed');
+    render(d.orders||[]); setStatus(`Đã tải ${(d.orders||[]).length} đơn`);
+  }catch(e){ setStatus(friendly(e.message),false); }
+}
+
+document.getElementById('refresh').onclick=loadOrders;
+document.getElementById('goLogin').onclick=()=>location.href='/login';
+document.getElementById('goStaff').onclick=()=>location.href='/staff';
+setInterval(loadOrders,2000);
+toggleLoginBtn();
+loadOrders();
+</script>
+</body>
+</html>

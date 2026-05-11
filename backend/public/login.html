@@ -1,0 +1,38 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng nhập nhân viên</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; --danger:#b91c1c; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
+    .wrap{max-width:440px;margin:60px auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+    h1{margin:0 0 8px}.muted{color:var(--muted);font-size:14px}
+    label{display:block;margin-top:10px;font-weight:600} input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:6px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.btn{padding:10px 14px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.ok{color:#15803d}.err{color:var(--danger)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Đăng nhập nhân viên</h1>
+    <div class="muted">Tài khoản demo: staff1/staff123, kitchen1/kitchen123</div>
+    <label>Tên đăng nhập</label><input id="username" value="staff1" />
+    <label>Mật khẩu</label><input id="password" type="password" value="staff123" />
+    <div class="row">
+      <button id="loginBtn" class="btn primary">Đăng nhập</button>
+      <button id="goKitchen" class="btn">Vào bếp</button>
+      <button id="goStaff" class="btn">Vào thu ngân</button>
+    </div>
+    <p id="status" class="muted"></p>
+  </div>
+<script>
+const usernameEl=document.getElementById('username');const passwordEl=document.getElementById('password');const statusEl=document.getElementById('status');
+function setStatus(msg,ok=true){statusEl.className=ok?'ok':'err';statusEl.textContent=msg}
+async function login(){try{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:usernameEl.value.trim(),password:passwordEl.value})});const data=await res.json();if(!res.ok)throw new Error(data.message||'Đăng nhập thất bại');localStorage.setItem('staff_token',data.token);localStorage.setItem('kitchen_token',data.token);localStorage.setItem('staff_user',JSON.stringify(data.user));setStatus(`Đăng nhập thanh cong: ${data.user.username}`,true);return true;}catch(e){setStatus(e.message,false);return false;}}
+loginBtn.onclick=login;goKitchen.onclick=async()=>{if(await login())location.href='/kitchen'};goStaff.onclick=async()=>{if(await login())location.href='/staff'};
+</script>
+</body>
+</html>
+

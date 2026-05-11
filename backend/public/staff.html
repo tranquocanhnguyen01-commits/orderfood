@@ -1,0 +1,170 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bảng điều khiển thu ngân</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; --ok:#15803d; --err:#b91c1c; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
+    .container{max-width:1180px;margin:0 auto;padding:16px}.top{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.muted{color:var(--muted);font-size:14px}.ok{color:var(--ok)}.err{color:var(--err)}
+    .btn{padding:9px 12px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-weight:600}.btn:hover{background:#f8fafc}.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    select{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;align-items:start}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .card.urgent{border-color:#f59e0b;background:#fffbeb}.card.payable{border-color:#10b981;background:#ecfdf5}
+    .between{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#1e3a8a}
+    .order-line{border-top:1px dashed var(--line);margin-top:8px;padding-top:8px}.item{display:flex;justify-content:space-between;gap:8px;align-items:center;margin:4px 0}
+    .detail-wrap{margin-top:10px;padding:10px;border:1px solid #dbeafe;background:#f8fbff;border-radius:10px}
+    .detail-title{font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:6px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top">
+      <h1 style="margin:0 0 6px">Bảng điều khiển thu ngân (Phiên hiện tại)</h1>
+      <div class="muted">Màn hình thao tác chính. Phiên cũ xem ở trang Lịch sử.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="refresh" class="btn">Làm mới</button>
+        <label>Bộ lọc:</label>
+        <select id="filter">
+          <option value="active">Đang hoạt động (khuyến nghị)</option>
+          <option value="need_serve">Cần phục vụ</option>
+          <option value="need_payment">Cần thanh toán</option>
+        </select>
+        <button id="goHistory" class="btn">Lịch sử</button>
+        <button id="goKitchen" class="btn">Bếp</button>
+        <button id="goLogin" class="btn">Đăng nhập</button>
+        <span id="status" class="muted"></span>
+      </div>
+    </div>
+    <div id="tables" class="grid"></div>
+  </div>
+
+<script>
+const statusEl=document.getElementById('status');
+const tablesEl=document.getElementById('tables');
+const filterEl=document.getElementById('filter');
+const expanded=new Set();
+
+function token(){ return localStorage.getItem('staff_token') || ''; }
+function money(v){ return Number(v).toLocaleString() + ' VND'; }
+function setStatus(msg,ok=true){ statusEl.className=ok?'ok':'err'; statusEl.textContent=msg; }
+function friendly(msg){ if(msg&&msg.startsWith('Invalid item transition')) return 'Chuyển trạng thái món không hợp lệ.'; if(msg==='Order must be in served status before payment') return 'Cần phục vụ hết món trước khi thanh toán.'; if(msg==='Cannot pay table: some orders are not served yet') return 'Bàn này còn món chưa phục vụ.'; return msg||'Có lỗi xảy ra'; }
+
+async function updateItem(itemId,status){
+  try{
+    const r=await fetch(`/api/staff/order-items/${itemId}/status`,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token()}`},body:JSON.stringify({status})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.message||'Update failed');
+    setStatus(`Món #${itemId} -> ${status}`); await loadOrders();
+  }catch(e){ setStatus(friendly(e.message),false); }
+}
+
+async function payTable(tableCode){
+  try{
+    const r=await fetch(`/api/staff/tables/${encodeURIComponent(tableCode)}/pay-open-session`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token()}`},body:JSON.stringify({method:'cash'})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.message||'Table payment failed');
+    setStatus(`Đã thanh toán cả bàn ${tableCode}: ${money(d.totalAmount)} (${d.paidOrdersCount} đơn)`); await loadOrders();
+  }catch(e){ setStatus(friendly(e.message),false); }
+}
+
+function groupByTable(orders){
+  const map=new Map();
+  for(const o of orders){ const code=o.table?.code||'-'; if(!map.has(code)) map.set(code,[]); map.get(code).push(o); }
+
+  return [...map.entries()].map(([tableCode,list])=>{
+    const latestSessionId=Math.max(...list.map(o=>Number(o.sessionId||0)));
+    const current=list.filter(o=>Number(o.sessionId||0)===latestSessionId);
+    const readyItems=current.flatMap(o=>o.items||[]).filter(i=>i.kitchenStatus==='ready').length;
+    const servedUnpaid=current.filter(o=>o.status==='served'&&o.paymentStatus!=='paid');
+    const unpaidOpen=current.filter(o=>o.paymentStatus!=='paid'&&!['cancelled','completed'].includes(o.status));
+    const blocking=unpaidOpen.filter(o=>o.status!=='served');
+    const allItemsServedOrCancelled=unpaidOpen.every(o=>(o.items||[]).every(i=>i.kitchenStatus==='served'||i.kitchenStatus==='cancelled'));
+    const canPayTable=servedUnpaid.length>0&&unpaidOpen.length>0&&blocking.length===0&&allItemsServedOrCancelled;
+    const total=servedUnpaid.reduce((sum,o)=>sum+(o.items||[]).reduce((s,i)=>s+Number(i.unitPriceSnapshot)*Number(i.quantity),0),0);
+    return { tableCode, sessionId:latestSessionId, orders:current, readyItems, servedUnpaid, unpaidOpen, canPayTable, total };
+  });
+}
+
+function applyFilter(tables){
+  const f=filterEl.value;
+  if(f==='need_serve') return tables.filter(t=>t.readyItems>0);
+  if(f==='need_payment') return tables.filter(t=>t.servedUnpaid.length>0&&t.canPayTable);
+  return tables.filter(t=>t.unpaidOpen.length>0);
+}
+
+function sortTables(tables){
+  return tables.sort((a,b)=>{
+    const score=t=>(t.readyItems>0?1000:0)+(t.servedUnpaid.length>0?500:0)+t.unpaidOpen.length;
+    return score(b)-score(a)||a.tableCode.localeCompare(b.tableCode);
+  });
+}
+
+function render(tables){
+  tablesEl.innerHTML='';
+  if(!tables.length){ tablesEl.innerHTML='<div class="muted">Không có bàn nào theo bộ lọc hiện tại.</div>'; return; }
+
+  for(const t of tables){
+    const cls=t.readyItems>0?'card urgent':(t.servedUnpaid.length>0?'card payable':'card');
+    const c=document.createElement('div'); c.className=cls;
+    const isOpen=expanded.has(t.tableCode);
+
+    c.innerHTML=`<div class="between"><strong>Bàn ${t.tableCode}</strong><span class="badge">Phiên #${t.sessionId} | ${t.orders.length} đơn</span></div>
+    <div class="muted">Món sẵn sàng: <strong>${t.readyItems}</strong> | Đã phục vụ chưa thanh toán: <strong>${t.servedUnpaid.length}</strong><br/>Tổng cần thu: <strong>${money(t.total)}</strong></div>`;
+
+    const actions=document.createElement('div'); actions.className='row';
+    if(t.canPayTable){ const payBtn=document.createElement('button'); payBtn.className='btn primary'; payBtn.textContent='Thanh toán bàn'; payBtn.onclick=()=>payTable(t.tableCode); actions.appendChild(payBtn); }
+    const detailBtn=document.createElement('button'); detailBtn.className='btn'; detailBtn.textContent=isOpen?'Ẩn chi tiết':'Xem chi tiết'; detailBtn.onclick=()=>{isOpen?expanded.delete(t.tableCode):expanded.add(t.tableCode); render(tables);};
+    actions.appendChild(detailBtn);
+    c.appendChild(actions);
+
+    if(isOpen){
+      const detailWrap=document.createElement('div');
+      detailWrap.className='detail-wrap';
+      detailWrap.innerHTML='<div class="detail-title">Chi tiết đơn trong phiên hiện tại</div>';
+      for(const o of t.orders.sort((a,b)=>Number(a.id)-Number(b.id))){
+        const total=(o.items||[]).reduce((s,i)=>s+Number(i.unitPriceSnapshot)*Number(i.quantity),0);
+        const od=document.createElement('div'); od.className='order-line';
+        od.innerHTML=`<div class="between"><strong>${o.orderCode}</strong><span class="badge">${o.status} | ${o.paymentStatus}</span></div><div class="muted">Tổng: ${money(total)}</div>`;
+        for(const item of (o.items||[])){
+          const it=document.createElement('div'); it.className='item';
+          it.innerHTML=`<span>${item.quantity} x ${item.itemNameSnapshot} <span class="muted">(${item.kitchenStatus})</span></span>`;
+          if(item.kitchenStatus==='ready'){ const b=document.createElement('button'); b.className='btn'; b.textContent='Đã phục vụ'; b.onclick=()=>updateItem(Number(item.id),'served'); it.appendChild(b); }
+          od.appendChild(it);
+        }
+        detailWrap.appendChild(od);
+      }
+      c.appendChild(detailWrap);
+    }
+
+    tablesEl.appendChild(c);
+  }
+}
+
+function toggleLoginBtn(){ document.getElementById('goLogin').style.display = token() ? 'none' : 'inline-block'; }
+
+async function loadOrders(){
+  toggleLoginBtn();
+  if(!token()){ setStatus('Chưa đăng nhập, vào /login',false); return; }
+  try{
+    const r=await fetch('/api/staff/orders',{headers:{Authorization:`Bearer ${token()}`}});
+    const d=await r.json(); if(!r.ok) throw new Error(d.message||'Load failed');
+    const sorted=sortTables(applyFilter(groupByTable(d.orders||[])));
+    for(const code of [...expanded]) if(!sorted.some(t=>t.tableCode===code)) expanded.delete(code);
+    render(sorted); setStatus(`Đã tải ${sorted.length} bàn`);
+  }catch(e){ setStatus(friendly(e.message),false); }
+}
+
+document.getElementById('refresh').onclick=loadOrders;
+document.getElementById('goHistory').onclick=()=>location.href='/staff-history';
+document.getElementById('goKitchen').onclick=()=>location.href='/kitchen';
+document.getElementById('goLogin').onclick=()=>location.href='/login';
+filterEl.onchange=loadOrders;
+setInterval(loadOrders,2000);
+toggleLoginBtn();
+loadOrders();
+</script>
+</body>
+</html>

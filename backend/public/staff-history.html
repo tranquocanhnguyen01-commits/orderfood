@@ -1,0 +1,154 @@
+﻿<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Staff History</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; --ok:#15803d; --err:#b91c1c; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
+    .container{max-width:1180px;margin:0 auto;padding:16px}.top{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.muted{color:var(--muted);font-size:14px}.ok{color:var(--ok)}.err{color:var(--err)}
+    .btn{padding:9px 12px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-weight:600}.btn:hover{background:#f8fafc}
+    input,select{padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:12px;align-items:start}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+    .between{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#eef2ff;color:#1e3a8a}
+    .detail-wrap{margin-top:10px;padding:10px;border:1px solid #dbeafe;background:#f8fbff;border-radius:10px}
+    .detail-title{font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:6px}
+    .order-line{border-top:1px dashed var(--line);margin-top:8px;padding-top:8px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="top">
+      <h1 style="margin:0 0 6px">Lịch sử thu ngân (Nhóm theo lần chốt bàn)</h1>
+      <div class="muted">Mỗi thẻ là một lần chốt bàn (bàn + phiên đã đóng)</div>
+      <div class="row" style="margin-top:8px">
+        <input id="tableCode" placeholder="Mã bàn (vd: T01)" />
+        <input id="dateFrom" type="date" />
+        <input id="dateTo" type="date" />
+        <select id="status"><option value="">Tất cả trạng thái</option><option>completed</option><option>cancelled</option><option>served</option><option>ready</option><option>preparing</option><option>new</option></select>
+        <button id="search" class="btn">Tìm kiếm</button>
+        <button id="goStaff" class="btn">Quay lại thu ngân</button>
+        <button id="goLogin" class="btn">Đăng nhập</button>
+        <span id="state" class="muted"></span>
+      </div>
+    </div>
+
+    <div id="groups" class="grid"></div>
+  </div>
+
+<script>
+const groupsEl=document.getElementById('groups');
+const stateEl=document.getElementById('state');
+const tableCodeEl=document.getElementById('tableCode');
+const dateFromEl=document.getElementById('dateFrom');
+const dateToEl=document.getElementById('dateTo');
+const statusEl=document.getElementById('status');
+const expanded = new Set();
+
+function token(){return localStorage.getItem('staff_token')||''}
+function money(v){return Number(v).toLocaleString()+' VND'}
+function setState(m,ok=true){stateEl.className=ok?'ok':'err';stateEl.textContent=m}
+function toggleLoginBtn(){document.getElementById('goLogin').style.display=token()?'none':'inline-block'}
+
+function groupByPaySession(orders){
+  const map = new Map();
+  for(const o of orders){
+    const key = `${o.table?.code||'-'}::${o.sessionId}`;
+    if(!map.has(key)) map.set(key, { tableCode:o.table?.code||'-', sessionId:o.sessionId, closedAt:o.session?.closedAt, orders:[] });
+    map.get(key).orders.push(o);
+  }
+
+  const arr = [...map.values()].map(g=>{
+    const total = g.orders.reduce((sum,o)=>sum + (o.items||[]).reduce((s,i)=>s+Number(i.unitPriceSnapshot)*Number(i.quantity),0),0);
+    const paidOrders = g.orders.filter(o=>o.paymentStatus==='paid').length;
+    return { ...g, total, paidOrders };
+  });
+
+  return arr.sort((a,b)=>{
+    const at = a.closedAt ? new Date(a.closedAt).getTime() : 0;
+    const bt = b.closedAt ? new Date(b.closedAt).getTime() : 0;
+    return bt-at;
+  });
+}
+
+function render(groups){
+  groupsEl.innerHTML='';
+  if(!groups.length){ groupsEl.innerHTML='<div class="muted">Không có dữ liệu lịch sử.</div>'; return; }
+
+  for(const g of groups){
+    const key = `${g.tableCode}::${g.sessionId}`;
+    const isOpen = expanded.has(key);
+    const card = document.createElement('div');
+    card.className='card';
+
+    const closedText = g.closedAt ? new Date(g.closedAt).toLocaleString() : 'N/A';
+    card.innerHTML = `<div class="between"><strong>Table ${g.tableCode}</strong><span class="badge">Session #${g.sessionId} | ${g.orders.length} orders</span></div>
+      <div class="muted">Đóng lúc: ${closedText}</div>
+      <div class="muted">Đơn đã thanh toán: <strong>${g.paidOrders}</strong> | Tổng phiên: <strong>${money(g.total)}</strong></div>`;
+
+    const actions = document.createElement('div');
+    actions.className='row';
+    const btn = document.createElement('button');
+    btn.className='btn';
+    btn.textContent = isOpen ? 'Ẩn chi tiết' : 'Xem chi tiết';
+    btn.onclick = ()=>{ if(isOpen) expanded.delete(key); else expanded.add(key); render(groups); };
+    actions.appendChild(btn);
+    card.appendChild(actions);
+
+    if(isOpen){
+      const detailWrap = document.createElement('div');
+      detailWrap.className = 'detail-wrap';
+      detailWrap.innerHTML = '<div class="detail-title">Chi tiết đơn trong phiên</div>';
+      for(const o of g.orders.sort((a,b)=>Number(a.id)-Number(b.id))){
+        const total=(o.items||[]).reduce((s,i)=>s+Number(i.unitPriceSnapshot)*Number(i.quantity),0);
+        const d=document.createElement('div');
+        d.className='order-line';
+        d.innerHTML = `<div class="between"><strong>${o.orderCode}</strong><span class="badge">${o.status} | ${o.paymentStatus}</span></div>
+          <div class="muted">${new Date(o.createdAt).toLocaleString()} | Total: ${money(total)}</div>
+          <ul>${(o.items||[]).map(i=>`<li>${i.quantity} x ${i.itemNameSnapshot} (${i.kitchenStatus})</li>`).join('')}</ul>`;
+        detailWrap.appendChild(d);
+      }
+      card.appendChild(detailWrap);
+    }
+
+    groupsEl.appendChild(card);
+  }
+}
+
+async function loadHistory(){
+  toggleLoginBtn();
+  if(!token()){ setState('Chua dang nhap, vao /login',false); return; }
+
+  try{
+    const qs = new URLSearchParams();
+    if(tableCodeEl.value.trim()) qs.set('tableCode', tableCodeEl.value.trim());
+    if(dateFromEl.value) qs.set('dateFrom', dateFromEl.value);
+    if(dateToEl.value) qs.set('dateTo', dateToEl.value);
+    if(statusEl.value) qs.set('status', statusEl.value);
+
+    const r = await fetch('/api/staff/orders/history?' + qs.toString(), { headers:{ Authorization:`Bearer ${token()}` } });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.message||'Load failed');
+
+    const groups = groupByPaySession(d.orders||[]);
+    for(const k of [...expanded]) if(!groups.some(g=>`${g.tableCode}::${g.sessionId}`===k)) expanded.delete(k);
+
+    render(groups);
+    setState(`Tìm thấy ${groups.length} nhóm phiên chốt bàn`);
+  }catch(e){
+    setState(e.message,false);
+  }
+}
+
+document.getElementById('search').onclick=loadHistory;
+document.getElementById('goStaff').onclick=()=>location.href='/staff';
+document.getElementById('goLogin').onclick=()=>location.href='/login';
+loadHistory();
+</script>
+</body>
+</html>
+
