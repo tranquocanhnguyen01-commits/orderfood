@@ -24,6 +24,7 @@
         <button id="refresh" class="btn">Làm mới</button>
         <button id="goLogin" class="btn">Đăng nhập</button>
         <button id="goStaff" class="btn">Thu ngân</button>
+        <button id="goMenu" class="btn">Về menu</button>
         <span id="status" class="muted"></span>
       </div>
     </div>
@@ -83,6 +84,7 @@ async function loadOrders(){
 document.getElementById('refresh').onclick=loadOrders;
 document.getElementById('goLogin').onclick=()=>location.href='/login';
 document.getElementById('goStaff').onclick=()=>location.href='/staff';
+document.getElementById('goMenu').onclick=()=>location.href='/login';
 setInterval(loadOrders,2000);
 toggleLoginBtn();
 loadOrders();

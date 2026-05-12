@@ -36,6 +36,7 @@
         </select>
         <button id="goHistory" class="btn">Lịch sử</button>
         <button id="goKitchen" class="btn">Bếp</button>
+        <button id="goMenu" class="btn">Về menu</button>
         <button id="goLogin" class="btn">Đăng nhập</button>
         <span id="status" class="muted"></span>
       </div>
@@ -160,6 +161,7 @@ async function loadOrders(){
 document.getElementById('refresh').onclick=loadOrders;
 document.getElementById('goHistory').onclick=()=>location.href='/staff-history';
 document.getElementById('goKitchen').onclick=()=>location.href='/kitchen';
+document.getElementById('goMenu').onclick=()=>location.href='/login';
 document.getElementById('goLogin').onclick=()=>location.href='/login';
 filterEl.onchange=loadOrders;
 setInterval(loadOrders,2000);

@@ -38,6 +38,10 @@ app.get('/staff-history', (_req, res) => {
   res.sendFile(path.join(publicDir, 'staff-history.html'));
 });
 
+app.get('/admin', (_req, res) => {
+  res.sendFile(path.join(publicDir, 'admin.html'));
+});
+
 app.use('/api', router);
 
 app.use((err, _req, res, _next) => {

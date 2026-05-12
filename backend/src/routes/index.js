@@ -2,9 +2,11 @@ import { Router } from 'express';
 import { requireValidQr } from '../middleware/require-valid-qr.js';
 import { requireStaffAuth } from '../middleware/require-staff-auth.js';
 import {
+  createMenuItemByAdmin,
   createPayment,
   createPublicOrder,
   getPublicMenu,
+  listMenuCategories,
   listPublicTableOrders,
   listStaffOrderHistory,
   listStaffOrders,
@@ -20,6 +22,9 @@ router.post('/auth/login', login);
 router.get('/public/menu', requireValidQr, getPublicMenu);
 router.get('/public/table-orders', requireValidQr, listPublicTableOrders);
 router.post('/public/orders', requireValidQr, createPublicOrder);
+
+router.get('/staff/menu-categories', requireStaffAuth, listMenuCategories);
+router.post('/staff/menu-items', requireStaffAuth, createMenuItemByAdmin);
 
 router.get('/staff/orders', requireStaffAuth, listStaffOrders);
 router.get('/staff/orders/history', requireStaffAuth, listStaffOrderHistory);

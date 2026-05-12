@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trang admin - Thêm món</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; --ok:#15803d; --err:#b91c1c; }
+    *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
+    .wrap{max-width:760px;margin:30px auto;padding:0 14px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}.field{display:grid;gap:6px;margin-top:10px}
+    input,select,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff}
+    textarea{min-height:90px;resize:vertical}.btn{padding:10px 14px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.muted{color:var(--muted);font-size:14px}.ok{color:var(--ok)}.err{color:var(--err)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1 style="margin:0 0 6px">Admin - Thêm món mới</h1>
+      <div class="muted">Chỉ tài khoản admin mới có quyền thêm món.</div>
+      <div class="row" style="margin-top:10px">
+        <button id="goLogin" class="btn">Đăng nhập</button>
+        <button id="goKitchen" class="btn">Bếp</button>
+        <button id="goStaff" class="btn">Thu ngân</button>
+      </div>
+      <p id="status" class="muted"></p>
+      <form id="form">
+        <div class="field">
+          <label>Danh mục</label>
+          <select id="categoryId" required></select>
+        </div>
+        <div class="field">
+          <label>Tên món</label>
+          <input id="name" required />
+        </div>
+        <div class="field">
+          <label>Giá (VND)</label>
+          <input id="price" type="number" min="1" step="1000" required />
+        </div>
+        <div class="field">
+          <label>SKU (không bắt buộc)</label>
+          <input id="sku" />
+        </div>
+        <div class="field">
+          <label>Mô tả (không bắt buộc)</label>
+          <textarea id="description"></textarea>
+        </div>
+        <div class="field">
+          <label>URL ảnh (không bắt buộc)</label>
+          <input id="imageUrl" />
+        </div>
+        <div class="field">
+          <label>Thứ tự hiển thị</label>
+          <input id="sortOrder" type="number" value="0" />
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" type="submit">Thêm món</button>
+        </div>
+      </form>
+    </div>
+  </div>
+<script>
+const statusEl=document.getElementById('status');
+const categoryEl=document.getElementById('categoryId');
+const formEl=document.getElementById('form');
+const user=JSON.parse(localStorage.getItem('staff_user')||'null');
+const token=localStorage.getItem('staff_token')||'';
+
+function setStatus(msg,ok=true){statusEl.className=ok?'ok':'err';statusEl.textContent=msg;}
+function authHeaders(){return {'Content-Type':'application/json','Authorization':`Bearer ${token}`};}
+
+async function loadCategories(){
+  const r=await fetch('/api/staff/menu-categories',{headers:{Authorization:`Bearer ${token}`}});
+  const d=await r.json();
+  if(!r.ok) throw new Error(d.message||'Không tải được danh mục');
+  categoryEl.innerHTML=(d.categories||[]).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+async function submitForm(e){
+  e.preventDefault();
+  try{
+    const body={
+      categoryId:Number(categoryEl.value),
+      name:document.getElementById('name').value.trim(),
+      price:Number(document.getElementById('price').value),
+      sku:document.getElementById('sku').value.trim()||null,
+      description:document.getElementById('description').value.trim()||null,
+      imageUrl:document.getElementById('imageUrl').value.trim()||null,
+      sortOrder:Number(document.getElementById('sortOrder').value||0)
+    };
+    const r=await fetch('/api/staff/menu-items',{method:'POST',headers:authHeaders(),body:JSON.stringify(body)});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.message||'Thêm món thất bại');
+    setStatus(`Đã thêm món: ${d.item.name}`,true);
+    formEl.reset();
+    document.getElementById('sortOrder').value='0';
+  }catch(err){ setStatus(err.message,false); }
+}
+
+function guard(){
+  if(!token||!user){ setStatus('Chưa đăng nhập. Vui lòng vào trang đăng nhập.',false); formEl.style.display='none'; return false; }
+  if(user.role!=='admin'){ setStatus('Bạn không có quyền vào trang admin.',false); formEl.style.display='none'; return false; }
+  return true;
+}
+
+document.getElementById('goLogin').onclick=()=>location.href='/login';
+document.getElementById('goKitchen').onclick=()=>location.href='/kitchen';
+document.getElementById('goStaff').onclick=()=>location.href='/staff';
+formEl.onsubmit=submitForm;
+
+(async function init(){
+  if(!guard()) return;
+  try{
+    await loadCategories();
+    setStatus(`Đăng nhập admin: ${user.username}`,true);
+  }catch(err){
+    setStatus(err.message,false);
+  }
+})();
+</script>
+</body>
+</html>

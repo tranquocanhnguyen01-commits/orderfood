@@ -112,6 +112,45 @@ export async function getPublicMenu(req, res) {
   return res.json(toJson({ categories }));
 }
 
+export async function listMenuCategories(req, res) {
+  const categories = await prisma.menuCategory.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }]
+  });
+  return res.json(toJson({ categories }));
+}
+
+export async function createMenuItemByAdmin(req, res) {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ message: 'Only admin can add menu items' });
+  }
+
+  const { categoryId, name, price, description, imageUrl, sku, sortOrder } = req.body;
+  if (!categoryId || !name || Number(price) <= 0) {
+    return res.status(400).json({ message: 'categoryId, name and positive price are required' });
+  }
+
+  const category = await prisma.menuCategory.findUnique({ where: { id: Number(categoryId) } });
+  if (!category || !category.isActive) {
+    return res.status(404).json({ message: 'Menu category not found or inactive' });
+  }
+
+  const created = await prisma.menuItem.create({
+    data: {
+      categoryId: Number(categoryId),
+      name: String(name).trim(),
+      price: Number(price),
+      description: description ? String(description).trim() : null,
+      imageUrl: imageUrl ? String(imageUrl).trim() : null,
+      sku: sku ? String(sku).trim() : null,
+      sortOrder: Number.isInteger(Number(sortOrder)) ? Number(sortOrder) : 0,
+      isAvailable: true
+    }
+  });
+
+  return res.status(201).json(toJson({ item: created }));
+}
+
 export async function createPublicOrder(req, res) {
   const { items, customerNote } = req.body;
 

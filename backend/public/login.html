@@ -7,31 +7,69 @@
   <style>
     :root { --bg:#f4f6f8; --card:#fff; --line:#e2e8f0; --text:#0f172a; --muted:#64748b; --brand:#0f766e; --danger:#b91c1c; }
     *{box-sizing:border-box} body{margin:0;font-family:"Segoe UI",Tahoma,sans-serif;background:radial-gradient(circle at top right,#d1fae5 0%,var(--bg) 45%);color:var(--text)}
-    .wrap{max-width:440px;margin:60px auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
-    h1{margin:0 0 8px}.muted{color:var(--muted);font-size:14px}
-    label{display:block;margin-top:10px;font-weight:600} input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;margin-top:6px}
-    .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.btn{padding:10px 14px;border:1px solid var(--line);background:#fff;border-radius:10px;cursor:pointer;font-weight:600}
-    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}.ok{color:#15803d}.err{color:var(--danger)}
+    .wrap{max-width:760px;margin:56px auto;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:24px}
+    h1{margin:0 0 8px;font-size:52px;line-height:1.1;white-space:nowrap}
+    .muted{color:var(--muted);font-size:14px;line-height:1.45}
+    label{display:block;margin-top:14px;font-weight:700;font-size:15px}
+    input{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;margin-top:7px;font-size:16px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    .btn{padding:11px 14px;border:1px solid var(--line);background:#fff;border-radius:12px;cursor:pointer;font-weight:700;font-size:16px}
+    .btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+    .menu-box{display:none;margin-top:18px;padding:14px;border:1px dashed #cbd5e1;border-radius:14px;background:#f8fafc}
+    .menu-title{font-weight:700;font-size:14px;color:#334155;margin-bottom:10px}
+    .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .menu-grid .btn{width:100%}
+    #goAdmin{grid-column:1/-1}
+    .head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .head .btn{display:none}
+    .ok,.err{margin-top:14px;font-size:15px}
+    .ok{color:#15803d}.err{color:var(--danger)}
+    @media (max-width:900px){
+      .wrap{max-width:680px}
+      h1{font-size:46px}
+    }
+    @media (max-width:700px){
+      h1{font-size:34px;white-space:normal}
+      .wrap{margin:22px 10px;padding:16px}
+      .menu-grid{grid-template-columns:1fr}
+      #goAdmin{grid-column:auto}
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Đăng nhập nhân viên</h1>
-    <div class="muted">Tài khoản demo: staff1/staff123, kitchen1/kitchen123</div>
-    <label>Tên đăng nhập</label><input id="username" value="staff1" />
-    <label>Mật khẩu</label><input id="password" type="password" value="staff123" />
-    <div class="row">
-      <button id="loginBtn" class="btn primary">Đăng nhập</button>
-      <button id="goKitchen" class="btn">Vào bếp</button>
-      <button id="goStaff" class="btn">Vào thu ngân</button>
+    <div class="head">
+      <h1>Đăng nhập nhân viên</h1>
+      <button id="logoutBtn" class="btn">Đăng xuất</button>
+    </div>
+    <div id="authBox">
+      <div class="muted">Tài khoản demo: admin/admin123, staff1/staff123, kitchen1/kitchen123</div>
+      <label>Tên đăng nhập</label><input id="username" value="staff1" />
+      <label>Mật khẩu</label><input id="password" type="password" value="staff123" />
+      <div class="row">
+        <button id="loginBtn" class="btn primary">Đăng nhập</button>
+      </div>
+    </div>
+    <div id="menuBox" class="menu-box">
+      <div class="menu-title">Chọn màn hình làm việc</div>
+      <div id="menuRow" class="menu-grid">
+        <button id="goKitchen" class="btn">Vào bếp</button>
+        <button id="goStaff" class="btn">Vào thu ngân</button>
+        <button id="goAdmin" class="btn" style="display:none">Vào admin</button>
+      </div>
     </div>
     <p id="status" class="muted"></p>
   </div>
 <script>
 const usernameEl=document.getElementById('username');const passwordEl=document.getElementById('password');const statusEl=document.getElementById('status');
+const authBoxEl=document.getElementById('authBox');const menuBoxEl=document.getElementById('menuBox');const goAdminEl=document.getElementById('goAdmin');
 function setStatus(msg,ok=true){statusEl.className=ok?'ok':'err';statusEl.textContent=msg}
-async function login(){try{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:usernameEl.value.trim(),password:passwordEl.value})});const data=await res.json();if(!res.ok)throw new Error(data.message||'Đăng nhập thất bại');localStorage.setItem('staff_token',data.token);localStorage.setItem('kitchen_token',data.token);localStorage.setItem('staff_user',JSON.stringify(data.user));setStatus(`Đăng nhập thanh cong: ${data.user.username}`,true);return true;}catch(e){setStatus(e.message,false);return false;}}
-loginBtn.onclick=login;goKitchen.onclick=async()=>{if(await login())location.href='/kitchen'};goStaff.onclick=async()=>{if(await login())location.href='/staff'};
+function showMenuByRole(role){authBoxEl.style.display='none';menuBoxEl.style.display='block';goAdminEl.style.display=role==='admin'?'block':'none';logoutBtn.style.display='inline-block';}
+function showLoginForm(){authBoxEl.style.display='block';menuBoxEl.style.display='none';goAdminEl.style.display='none';logoutBtn.style.display='none';}
+function logout(){localStorage.removeItem('staff_token');localStorage.removeItem('kitchen_token');localStorage.removeItem('staff_user');showLoginForm();setStatus('Đã đăng xuất',true);}
+async function login(){try{const res=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:usernameEl.value.trim(),password:passwordEl.value})});const data=await res.json();if(!res.ok)throw new Error(data.message||'Đăng nhập thất bại');localStorage.setItem('staff_token',data.token);localStorage.setItem('kitchen_token',data.token);localStorage.setItem('staff_user',JSON.stringify(data.user));showMenuByRole(data.user.role);setStatus(`Đăng nhập thành công: ${data.user.username}`,true);return true;}catch(e){showLoginForm();setStatus(e.message,false);return false;}}
+function applySession(){const user=JSON.parse(localStorage.getItem('staff_user')||'null');if(user&&user.role){showMenuByRole(user.role);setStatus(`Đã đăng nhập: ${user.username}`,true);}else{showLoginForm();}}
+loginBtn.onclick=login;goKitchen.onclick=()=>location.href='/kitchen';goStaff.onclick=()=>location.href='/staff';goAdminEl.onclick=()=>location.href='/admin';logoutBtn.onclick=logout;applySession();
 </script>
 </body>
 </html>

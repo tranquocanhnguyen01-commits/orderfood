@@ -32,6 +32,7 @@
         <select id="status"><option value="">Tất cả trạng thái</option><option>completed</option><option>cancelled</option><option>served</option><option>ready</option><option>preparing</option><option>new</option></select>
         <button id="search" class="btn">Tìm kiếm</button>
         <button id="goStaff" class="btn">Quay lại thu ngân</button>
+        <button id="goMenu" class="btn">Về menu</button>
         <button id="goLogin" class="btn">Đăng nhập</button>
         <span id="state" class="muted"></span>
       </div>
@@ -146,6 +147,7 @@ async function loadHistory(){
 
 document.getElementById('search').onclick=loadHistory;
 document.getElementById('goStaff').onclick=()=>location.href='/staff';
+document.getElementById('goMenu').onclick=()=>location.href='/login';
 document.getElementById('goLogin').onclick=()=>location.href='/login';
 loadHistory();
 </script>
